@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PulseBlog — Publish your thoughts like Medium (Single File)</title>
+  <meta name="description" content="A self-contained single-file web app to publish blogs with a markdown-friendly editor, live preview, and local persistence." />
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --accent: #4f46e5;
+      --shadow: 0 6px 20px rgba(0,0,0,.08);
+      --border: #e5e7eb;
+      --chip: #eef2ff;
+      --chipText: #4338ca;
+    }
+    [data-theme="dark"] {
+      --bg: #0b1020;
+      --card: #14182a;
+      --text: #e6eaf7;
+      --muted: #a5b4fc;
+      --shadow: 0 6px 20px rgba(0,0,0,.6);
+      --border: #23263a;
+      --chip: #1f2940;
+      --chipText: #c7d2fe;
+    }
+
+    * { box-sizing: border-box; }
+    html, body, #root { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      background: linear-gradient(135deg, rgba(79,70,229,.08), rgba(99,102,241,.04)),
+                  radial-gradient(circle at 0% 0%, rgba(99,102,241,.15), transparent 40%);
+      background-color: var(--bg);
+      color: var(--text);
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1.05fr 1.65fr;
+      gap: 20px;
+      width: min(1200px, 92%);
+      margin: 28px auto;
+    }
+    header.site-header {
+      display: flex; align-items: center; justify-content: space-between;
+      width: min(1200px, 92%); margin: 28px auto 0;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.25rem; }
+    .logo {
+      display: inline-grid; place-items: center;
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      color: white; font-size: 18px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.15);
+    }
+    .name { letter-spacing: .4px; }
+    .btn {
+      appearance: none; border: none; outline: none; cursor: pointer;
+      padding: 10px 14px; border-radius: 8px;
+      background: #0ea5e9; color: white; font-weight: 600;
+      transition: transform .08s ease-in-out, background .2s ease;
+    }
+    .btn.secondary { background: #e2e8f0; color: #0f172a; }
+    .btn.primary { background: var(--accent); }
+    .btn.small { padding: 6px 10px; font-size: 12px; }
+    .btn.danger { background: #ef4444; }
+    .btn:active { transform: scale(0.98); }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Layout blocks */
+    .composer h2, .feed-header h2 { margin: 0 0 12px; font-size: 1.15rem; }
+    .composer { padding: 14px; }
+    .feed { padding: 14px; height: fit-content; }
+
+    .field, .fields {
+      display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;
+    }
+    input[type="text"], input[type="search"], textarea {
+      width: 100%; padding: 12px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: #fff;
+      font-size: 14px; color: var(--text);
+    }
+    textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+    .preview-area { margin-top: 8px; padding: 12px; border-radius: 8px;
+      background: #f9fafb; border: 1px solid var(--border);
+      min-height: 60px;
+    }
+
+    #previewArea h1, #previewArea h2, #previewArea h3 { margin: 6px 0; }
+    #previewArea p { margin: 8px 0; }
+
+    .feed-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+    #filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+    .tag { background: var(--chip); color: var(--chipText); border: 1px solid rgba(0,0,0,.08);
+           border-radius: 999px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
+    .tag:hover { transform: translateY(-1px); }
+
+    .posts { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    .post { padding: 14px; border-radius: 12px; border: 1px solid var(--border); }
+
+    .post-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .post-title { font-size: 1.05rem; margin: 0; }
+    .post-date { color: var(--muted); font-size: 12px; }
+
+    .post-meta { display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; margin: 8px 0; flex-wrap: wrap; }
+    .post-content { font-size: 14px; line-height: 1.6; color: var(--text); }
+    .post-content p { margin: 0.25em 0; }
+    .post-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+
+    .empty { text-align: center; padding: 28px; color: var(--muted); }
+
+    /* Responsive: stack on small screens */
+    @media (max-width: 1024px) {
+      .container { grid-template-columns: 1fr; width: min(1100px, 95%); margin: 20px auto; }
+      header.site-header { width: min(1100px, 95%); }
+    }
+
+    /* Small helpers */
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="site-header" aria-label="Site header">
+    <div class="brand" aria-label="Brand">
+      <div class="logo" aria-label="Pulse icon">✦</div>
+      <div class="name" style="font-family:inherit;">PulseBlog</div>
+    </div>
+    <div class="header-actions" aria-label="Theme and actions">
+      <button id="themeToggle" class="btn" title="Toggle light/dark theme" aria-label="Toggle theme">Theme</button>
+      <button id="clearData" class="btn secondary" title="Clear all posts" aria-label="Clear all posts">Reset</button>
+    </div>
+  </header>
+
+  <main class="container" id="app" aria-label="Blog publishing application">
+    <!-- Composer -->
+    <section class="card composer" aria-label="Create a new post">
+      <h2>Publish a Post</h2>
+      <div class="field">
+        <input id="postTitle" type="text" placeholder="Title" aria-label="Post title" />
+      </div>
+      <div class="field" style="display:flex; gap:10px; align-items: flex-start;">
+        <textarea id="postContent" placeholder="Write your story... Markdown supported" rows="10" aria-label="Post content"></textarea>
+        <div id="previewArea" class="preview-area" aria-label="Live preview" style="flex:1; min-height:120px;"></div>
+      </div>
+      <div class="field" style="display:flex; gap:10px;">
+        <input id="postTags" type="text" placeholder="Tags (comma separated)" aria-label="Tags" />
+        <button id="publishBtn" class="btn primary" aria-label="Publish post">Publish Post</button>
+      </div>
+      <div class="field" style="margin-top:6px;">
+        <small class="muted">Tip: Use Markdown like # Header, **bold**, *italic*, [links](https://example.com), and - list items.</small>
+      </div>
+    </section>
+
+    <!-- Feed -->
+    <section class="card feed" aria-label="Blog feed">
+      <div class="feed-header">
+        <h2>Your Feed</h2>
+        <div class="search-wrap" aria-label="Search posts" style=" display:flex; gap:8px; align-items:center;">
+          <input id="searchInput" type="search" placeholder="Search posts..." aria-label="Search posts" style="min-width: 180px;" />
+        </div>
+      </div>
+
+      <div id="filters" aria-label="Filters">
+        <div class="tag-cloud" id="tagCloud" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+        <button id="clearFilter" class="btn small" aria-label="Clear filters" style="margin-left:auto;">Clear filters</button>
+      </div>
+
+      <div id="postsContainer" class="posts" aria-label="Posts list"></div>
+      <div id="emptyState" class="empty" style="display:none;">No posts yet. Publish your first post above!</div>
+    </section>
+  </main>
+
+  <footer class="footer" style="text-align:center; padding: 20px 0; color: var(--muted);">
+    Made with passion • PulseBlog
+  </footer>
+
+  <script>
+    (function() {
+      const STORAGE_KEY = 'pulse_blog_posts_v1';
+      let posts = [];
+      let currentTagFilter = null;
+
+      // Helpers
+      function savePosts() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+      }
+
+      function loadPosts() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        try { return JSON.parse(raw); } catch (e) { return []; }
+      }
+
+      function escapeHtml(str) {
+        return (str || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function timeAgo(iso) {
+        const diff = Date.now() - new Date(iso).getTime();
+        const sec = Math.floor(diff / 1000);
+        if (sec < 60) return sec + 's ago';
+        const min = Math.floor(sec / 60);
+        if (min < 60) return min + 'm ago';
+        const hour = Math.floor(min / 60);
+        if (hour < 24) return hour + 'h ago';
+        const day = Math.floor(hour / 24);
+        return day + 'd ago';
+      }
+
+      function parseTags(val) {
+        if (!val) return [];
+        return val.split(',').map(t => t.trim()).filter(t => t.length > 0);
+      }
+
+      function excerptFromMarkdown(md, maxLen = 180) {
+        if (!md) return '';
+        const base = md.substring(0, maxLen);
+        return base + (md.length > maxLen ? '...' : '');
+      }
+
+      // Minimal markdown converter (safe-ish, escapes first)
+      function mdToHtml(md) {
+        if (!md) return '';
+        // Escape first to avoid XSS
+        let text = md
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        // Headers
+        text = text.replace(/^(#{1,6})\s+(.*)$/gm, (m, p1, p2) => {
+          const level = p1.length;
+          return `<h${level}>${p2}</h${level}>`;
+        });
+        // Bold, italic
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        // Inline code
+        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // Links
+        text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+        // Lists: handle lines starting with "- "
+        const lines = text.split(/\n/);
+        let html = '';
+        let inList = false;
+        for (const line of lines) {
+          if (/^\-\s+/.test(line)) {
+            if (!inList) { html += '<ul>'; inList = true; }
+            const item = line.replace(/^\-\s+/, '');
+            html += `<li>${item}</li>`;
+          } else {
+            if (inList) { html += '</ul>'; inList = false; }
+            if (line.trim() === '') continue;
+            // If already a block tag, don't wrap
+            if (/^<\/?(h\d|ul|li|p|pre|code|blockquote)/.test(line) || line.startsWith('<')) {
+              html += line;
+            } else {
+              html += `<p>${line}</p>`;
+            }
+          }
+        }
+        if (inList) html += '</ul>';
+        return html;
+      }
+
+      function renderTagCloud() {
+        const cloud = document.getElementById('tagCloud');
+        cloud.innerHTML = '';
+        const allTags = new Set();
+        posts.forEach(p => p.tags && p.tags.forEach(t => allTags.add(t)));
+        Array.from(allTags).forEach(tag => {
+          const btn = document.createElement('button');
+          btn.className = 'tag';
+          btn.textContent = '#' + tag;
+          btn.style.cursor = 'pointer';
+          btn.dataset.tag = tag;
+          cloud.appendChild(btn);
+        });
+      }
+
+      function renderPosts() {
+        const container = document.getElementById('postsContainer');
+        container.innerHTML = '';
+        const searchVal = (document.getElementById('searchInput').value || '').toLowerCase();
+        const hasFilter = !!currentTagFilter;
+        const visible = posts.filter(p => {
+          if (hasFilter && !(p.tags || []).includes(currentTagFilter)) return false;
+          if (!searchVal) return true;
+          const hay = (p.title + ' ' + p.content + ' ' + (p.tags || []).join(' ')).toLowerCase();
+          return hay.includes(searchVal);
+        });
+
+        if (visible.length === 0) {
+          document.getElementById('emptyState').style.display = 'block';
+        } else {
+          document.getElementById('emptyState').style.display = 'none';
+        }
+
+        visible.forEach(post => {
+          const article = document.createElement('article');
+          article.className = 'post';
+          article.dataset.id = post.id;
+          const htmlContent = post.expanded ? mdToHtml(post.content) : mdToHtml(excerptFromMarkdown(post.content, 180));
+          article.innerHTML = `
+            <div class="post-header">
+              <h3 class="post-title">${escapeHtml(post.title)}</h3>
+              <span class="post-date" title="${new Date(post.createdAt).toLocaleString()}">${timeAgo(post.createdAt)}</span>
+            </div>
+            <div class="post-meta">
+              <span class="author">By ${escapeHtml(post.author)}</span>
+              <span class="tags">${(post.tags || []).map(t => '#' + escapeHtml(t)).join(' ')}</span>
+              <span class="likes" aria-label="likes">👍 ${post.likes || 0}</span>
+            </div>
+            <div class="post-content">${htmlContent}</div>
+            <div class="post-actions">
+              <button class="btn like" aria-label="Like post">Like</button>
+              <button class="btn read" aria-label="Toggle read more">${post.expanded ? 'Show less' : (post.content.length > 180 ? 'Read more' : 'View')}</button>
+              <button class="btn delete" aria-label="Delete post" title="Delete">Delete</button>
+            </div>
+          `;
+          container.appendChild(article);
+        });
+      }
+
+      // Initialize
+      function init() {
+        posts = loadPosts();
+
+        // Optional demo if empty
+        if (posts.length === 0) {
+          const demo = {
+            id: 'demo-' + Date.now(),
+            title: 'Welcome to PulseBlog',
+            content: '## Welcome\nThis is a single-file blog app. Write in Markdown and publish instantly.\n\n- Publish posts\n- Preview Markdown live\n- Filter by tags\n- Like and delete posts\n\nEnjoy writing!',
+            tags: ['welcome', 'demo'],
+            author: 'PulseBot',
+            createdAt: new Date().toISOString(),
+            likes: 0,
+            expanded: false,
+            comments: []
+          };
+          posts.push(demo);
+          savePosts();
+        }
+
+        // Render initial
+        renderTagCloud();
+        renderPosts();
+        // Preview initial
+        const current = document.getElementById('postContent').value;
+        document.getElementById('previewArea').innerHTML = mdToHtml(current);
+      }
+
+      // Event bindings
+      document.addEventListener('DOMContentLoaded', () => {
+        // Theme toggle
+        const root = document.documentElement;
+        const storedTheme = localStorage.getItem('pulse_theme');
+        if (storedTheme) {
+          root.setAttribute('data-theme', storedTheme);
+        }
+        document.getElementById('themeToggle').addEventListener('click', () => {
+          const current = root.getAttribute('data-theme') || 'light';
+          const next = current === 'dark' ? 'light' : 'dark';
+          root.setAttribute('data-theme', next);
+          localStorage.setItem('pulse_theme', next);
+        });
+
+        // Publish
+        document.getElementById('publishBtn').addEventListener('click', () => {
+          const title = document.getElementById('postTitle').value.trim();
+          const content = document.getElementById('postContent').value.trim();
+          const tags = parseTags(document.getElementById('postTags').value);
+          if (!title || !content) {
+            alert('Please provide a title and content.');
+            return;
+          }
+          const newPost = {
+            id: 'p-' + Date.now(),
+            title,
+            content,
+            tags,
+            author: 'You',
+            createdAt: new Date().toISOString(),
+            likes: 0,
+            expanded: false,
+            comments: []
+          };
+          posts.unshift(newPost);
+          savePosts();
+          // Clear editor
+          document.getElementById('postTitle').value = '';
+          document.getElementById('postContent').value = '';
+          document.getElementById('postTags').value = '';
+          // Re-render
+          renderTagCloud();
+          renderPosts();
+          // Update preview
+          document.getElementById('previewArea').innerHTML = '';
+        });
+
+        // Live preview as user types
+        document.getElementById('postContent').addEventListener('input', () => {
+          const html = mdToHtml(document.getElementById('postContent').value);
+          document.getElementById('previewArea').innerHTML = html;
+        });
+
+        // Delete, Like, Read actions via delegation
+        document.getElementById('postsContainer').addEventListener('click', (e) => {
+          const btn = e.target.closest('.btn');
+          if (!btn) return;
+          const card = btn.closest('.post');
+          if (!card) return;
+          const id = card.dataset.id;
+          const postIndex = posts.findIndex(p => p.id === id);
+          if (postIndex < 0) return;
+          if (btn.classList.contains('like')) {
+            posts[postIndex].likes = (posts[postIndex].likes || 0) + 1;
+            savePosts();
+            renderPosts();
+          } else if (btn.classList.contains('read')) {
+            posts[postIndex].expanded = !posts[postIndex].expanded;
+            savePosts();
+            renderPosts();
+          } else if (btn.classList.contains('delete')) {
+            if (confirm('Delete this post?')) {
+              posts.splice(postIndex, 1);
+              savePosts();
+              renderPosts();
+              renderTagCloud();
+            }
+          }
+        });
+
+        // Tag filter click
+        document.getElementById('tagCloud').addEventListener('click', (e) => {
+          const t = e.target.closest('.tag');
+          if (!t) return;
+          currentTagFilter = t.dataset.tag;
+          renderPosts();
+        });
+
+        // Search
+        document.getElementById('searchInput').addEventListener('input', () => {
+          renderPosts();
+        });
+
+        // Clear filters
+        document.getElementById('clearFilter').addEventListener('click', () => {
+          currentTagFilter = null;
+          renderPosts();
+        });
+
+        // Clear all posts
+        document.getElementById('clearData').addEventListener('click', () => {
+          if (confirm('Are you sure you want to delete all posts?')) {
+            localStorage.removeItem(STORAGE_KEY);
+            posts = [];
+            savePosts();
+            renderTagCloud();
+            renderPosts();
+            // Clear preview
+            document.getElementById('previewArea').innerHTML = '';
+          }
+        });
+
+        init();
+      });
+
+      // Init routine
+      function init() {
+        // Ensure data is loaded and UI in sync
+        posts = loadPosts();
+        if (posts.length === 0) {
+          // Create a tiny demo post if needed (handled in init)
+          // Keep as is to keep behavior consistent
+        }
+        renderTagCloud();
+        renderPosts();
+        // Preview initial
+        document.getElementById('previewArea').innerHTML = mdToHtml(document.getElementById('postContent').value);
+      }
+
+    })();
+  </script>
+</body>
+</html>
